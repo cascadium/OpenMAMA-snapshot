@@ -1,15 +1,45 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.0)
 project(OpenMAMA_snapshot)
 
 set(CMAKE_CXX_STANDARD 14)
 
-set(BOOST_ROOT "${_VCPKG_INSTALLED_DIR}/x64-windows")
+set(OPENMAMA_ROOT /mnt/c/Users/fquinn/SourceExternal/github/fquinner/OpenMAMA/build_ubuntu/install/)
 
-message(${BOOST_ROOT})
+find_package(Poco REQUIRED Foundation Util Net)
+include_directories("${OPENMAMA_ROOT}/include")
+include_directories(.)
+link_directories("${OPENMAMA_ROOT}/lib")
 
-find_package(Boost REQUIRED program_options)
+add_executable(cascadium-snapshot
+        main.cpp
+        MainApplication.cpp
+        MainApplication.h
+        subsystems/SubsystemServletRouter.cpp
+        subsystems/SubsystemServletRouter.h
+        subsystems/SubsystemOpenMama.cpp
+        subsystems/SubsystemOpenMama.h
+        subsystems/openmama/OpenMamaDictionaryRequestor.h
+        subsystems/openmama/OpenMamaStoreMessageListener.cpp
+        subsystems/openmama/OpenMamaStoreMessageListener.h
+        servlets/ServletOpenMamaSnapshot.cpp
+        servlets/ServletOpenMamaSnapshot.h
+        servlets/ServletRequestHandlerFactory.cpp
+        servlets/ServletRequestHandlerFactory.h OptionNames.h subsystems/SubsystemCommon.h)
 
-add_executable(cascadium-snapshot main.cpp ConfigManager.cpp ConfigManager.h RestRequestHandler.cpp RestRequestHandler.h ApplicationRunner.cpp ApplicationRunner.h)
+#target_link_libraries(cascadium-snapshot
+#        libmamacmd
+#        libmamacppmd
+#        libmamdamd
+#        libmamdabookmd
+#        Poco::Foundation
+#        Poco::Util
+#        Poco::Net)
 
-include_directories(${Boost_INCLUDE_DIR})
-target_link_libraries(cascadium-snapshot ${Boost_LIBRARIES})
+target_link_libraries(cascadium-snapshot
+        mama
+        mamacpp
+        mamda
+        mamdabook
+        Poco::Foundation
+        Poco::Util
+        Poco::Net)
