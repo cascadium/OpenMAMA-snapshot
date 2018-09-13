@@ -46,11 +46,12 @@ void SubsystemServletRouter::handleOption(const string &name, const string &valu
 }
 
 void SubsystemServletRouter::uninitialize() {
-    cerr << "Stopping the servlet subsystem" << endl;
+    logger.debug("Stopping the servlet subsystem");
     httpServer->stop();
 }
 
 void SubsystemServletRouter::reinitialize(Poco::Util::Application &app) {
+    logger.debug("Reinitializing the servlet subsystem");
     Subsystem::reinitialize(app);
 }
 
@@ -71,9 +72,9 @@ logger(Poco::Logger::get(SUBSYSTEM_NAME_SERVLET_ROUTER)),
 httpServer(nullptr),
 httpServerPort(8080)
 {
-
 }
 
 SubsystemServletRouter::~SubsystemServletRouter() {
-    cerr << "In destructor for subsystem servlet router" << endl;
+    logger.debug("Destroying servlet subsystem");
+    delete httpServer;
 }

@@ -22,12 +22,12 @@ using namespace Poco;
 using namespace Poco::Util;
 
 void MainApplication::initialize(Poco::Util::Application &self) {
-    cerr << "INITIALIZING" << endl;
+    logger().debug("Initializing the main application container");
     Application::initialize(self);
 }
 
 void MainApplication::uninitialize() {
-    cerr << "Unitializing main app" << endl;
+    logger().debug("Initializing the main application container");
     Application::uninitialize();
 }
 
@@ -63,7 +63,6 @@ void MainApplication::handleOption(const std::string &name, const std::string &v
 }
 
 void MainApplication::signalHandler(int signum) {
-//    Process::requestTermination(Process::id());
     MainApplication::terminate();
 }
 
@@ -79,27 +78,17 @@ void MainApplication::displayUsage(int exitCode) {
 }
 
 int MainApplication::main(const std::vector<std::string> &args) {
-    cout << "In application main" << endl;
-    logger().information("Hitting main in the application");
-
-//    signal(SIGHUP, signalHandler);
-//    signal(SIGINT, signalHandler);
-//    signal(SIGQUIT, signalHandler);
-//    signal(SIGTERM, signalHandler);
-//    signal(SIGUSR1, signalHandler);
-//    signal(SIGUSR2, signalHandler);
     logger().debug("Initializing subsystems...");
-
     waitForTerminationRequest();
-    cerr << "Termination request received" << endl;
-    return 99;
+    logger().information("Initializing subsystems...");
+    return Application::EXIT_OK;
 }
 
 const char *MainApplication::name() const {
     return MAIN_APPLICATION_NAME;
 }
 
-MainApplication::MainApplication() {
+MainApplication::MainApplication() : ServerApplication::ServerApplication() {
     signal(1, signalHandler);
     signal(2, signalHandler);
     signal(3, signalHandler);

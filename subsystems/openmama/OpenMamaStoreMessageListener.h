@@ -21,16 +21,22 @@ namespace cascadium {
             : public Wombat::MamdaMsgListener, Wombat::MamdaErrorListener, Wombat::MamdaQualityListener {
     public:
         explicit OpenMamaStoreMessageListener(SubsystemOpenMama *subsystemOpenMamaStore);
+        ~OpenMamaStoreMessageListener();
 
         void onMsg(Wombat::MamdaSubscription *subscription, const Wombat::MamaMsg &msg, short msgType) override;
 
-        void onError(Wombat::MamdaSubscription *subscription, Wombat::MamdaErrorSeverity severity,
+        void onError(Wombat::MamdaSubscription *subscription,
+                     Wombat::MamdaErrorSeverity severity,
                      Wombat::MamdaErrorCode errorCode,
                      const char *errorStr) override;
 
         void onQuality(Wombat::MamdaSubscription *subscription, mamaQuality quality) override;
 
         Wombat::MamaMsg* getSnapshot();
+
+        void setSubscription(Wombat::MamdaSubscription* subscription);
+
+        Wombat::MamdaSubscription* getSubscription();
 
     private:
         Poco::Logger &logger;
@@ -39,9 +45,9 @@ namespace cascadium {
         Wombat::MamaFieldCache* lastValueCache;
         Wombat::MamdaOrderBook* orderBookCache;
         Wombat::MamdaOrderBookListener* orderBookListener;
-        Wombat::MamaMsg* mamaMsgCache;
         bool hasReceivedSnapshot;
         bool isOrderBookSubscription;
+        Wombat::MamdaSubscription* subscription;
     };
 }
 

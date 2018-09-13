@@ -3,7 +3,7 @@ project(OpenMAMA_snapshot)
 
 set(CMAKE_CXX_STANDARD 14)
 
-set(OPENMAMA_ROOT /mnt/c/Users/fquinn/SourceExternal/github/fquinner/OpenMAMA/build_ubuntu/install/)
+set(OPENMAMA_ROOT /home/fquinn/SourceExternal/github/fquinner/OpenMAMA/build/install)
 
 find_package(Poco REQUIRED Foundation Util Net)
 include_directories("${OPENMAMA_ROOT}/include")

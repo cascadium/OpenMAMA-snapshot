@@ -51,7 +51,6 @@ OpenMamaStoreMessageListener::OpenMamaStoreMessageListener(SubsystemOpenMama* su
         , hasReceivedSnapshot(false)
         , isOrderBookSubscription(false)
 {
-    mamaMsgCache = nullptr;
     lastValueCache = new MamaFieldCache();
     lastValueCache->setUseLock(true);
     lastValueCache->create();
@@ -70,9 +69,6 @@ void OpenMamaStoreMessageListener::onMsg(MamdaSubscription *subscription, const 
         case MAMA_MSG_TYPE_INITIAL:
         case MAMA_MSG_TYPE_RECAP:
         case MAMA_MSG_TYPE_SNAPSHOT:
-//            if (mamaMsgCache == nullptr) {
-//                mamaMsgCache = ((MamaMsg *) &msg)->detach();
-//            }
             lastValueCache->apply(msg, subsystemOpenMamaStore->getDictionary());
             logger.debug("Level 1 full image [%d] received", (int) msgType);
             hasReceivedSnapshot = true;
@@ -156,4 +152,18 @@ MamaMsg* OpenMamaStoreMessageListener::getSnapshot() {
     }
 
     return msg;
+}
+
+void OpenMamaStoreMessageListener::setSubscription(MamdaSubscription* subscription) {
+    this->subscription = subscription;
+}
+
+MamdaSubscription* OpenMamaStoreMessageListener::getSubscription() {
+    return this->subscription;
+}
+
+OpenMamaStoreMessageListener::~OpenMamaStoreMessageListener() {
+    delete lastValueCache;
+    delete orderBookCache;
+    delete orderBookListener;
 }

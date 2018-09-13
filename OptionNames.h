@@ -13,5 +13,6 @@
 #define OPTION_NAME_OPENMAMA_SOURCE             "source"
 #define OPTION_NAME_OPENMAMA_TRANSPORT          "transport"
 #define OPTION_NAME_OPENMAMA_PAYLOAD            "payload"
+#define OPTION_NAME_OPENMAMA_QUEUES             "queues"
 
 #endif //OPENMAMA_SNAPSHOT_OPTIONNAMES_H

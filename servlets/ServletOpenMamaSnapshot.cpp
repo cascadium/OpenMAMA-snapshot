@@ -17,6 +17,7 @@ using namespace std;
 void ServletOpenMamaSnapshot::handleRequest(HTTPServerRequest& request, HTTPServerResponse& response) {
     Application& app = Application::instance();
     const string& uri = request.getURI();
+    app.logger().information("Handling a request!");
 
     URI uriParser(uri);
     const string& path = uriParser.getPath();

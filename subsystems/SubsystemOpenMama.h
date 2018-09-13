@@ -19,63 +19,57 @@ namespace cascadium {
     // Forward declarations to avoid circular reference
     class OpenMamaStoreMessageListener;
 
-    class SubsystemOpenMama : public SubsystemCommon {
-    public:
-        SubsystemOpenMama();
-        Wombat::MamaDictionary *getDictionary();
+    class SubsystemOpenMama : public SubsystemCommon, Wombat::MamaStartCallback {
+        public:
 
-        // Blocking call to acquire a snapshot of a symbol. Will raise a TimeoutException on timeout.
-        std::string
-        getSnapshotAsJson(const std::string &symbol);
+            SubsystemOpenMama();
 
-        OpenMamaStoreMessageListener*
-        getOpenMamaStoreMessageListener(const std::string &symbol);
+            Wombat::MamaDictionary *getDictionary();
 
-        void defineOptions(Poco::Util::OptionSet &options) override;
+            // Blocking call to acquire a snapshot of a symbol. Will raise a TimeoutException on timeout.
+            std::string getSnapshotAsJson(const std::string &symbol);
 
-        void handleOption(const std::string &name, const std::string &value) override;
+            OpenMamaStoreMessageListener* getOpenMamaStoreMessageListener(const std::string &symbol);
 
-    protected:
+            void defineOptions(Poco::Util::OptionSet &options) override;
 
-        void initialize(Poco::Util::Application &app) override;
+            void handleOption(const std::string &name, const std::string &value) override;
 
-        void uninitialize() override;
+        protected:
 
-        void reinitialize(Poco::Util::Application &app) override;
+            void initialize(Poco::Util::Application &app) override;
 
-        const char *name() const override;
+            void uninitialize() override;
 
-        ~SubsystemOpenMama() override;
+            void reinitialize(Poco::Util::Application &app) override;
 
-        ///void setUpSubsystemOpenMamaLogCn(MamaLogLevel level, const char *message);
+            const char *name() const override;
 
-    private:
+            ~SubsystemOpenMama() override;
 
-        Poco::Semaphore dictionarySemaphore;
+            void onStartComplete(Wombat::MamaStatus status) override;
 
-        Poco::Logger &logger;
+        private:
+            // Internal state
+            Poco::Semaphore dictionarySemaphore;
+            Poco::Logger &logger;
+            Wombat::MamaDictionary * dictionary;
+            mamaBridge bridge;
+            std::vector<mamaBridge> bridges;
+            Wombat::MamaSource * source;
+            std::map<std::string, OpenMamaStoreMessageListener *> openMamaStoreMessageListenerBySymbol;
+            Wombat::MamaQueueGroup * queueGroup;
+            Poco::Mutex listenerMapMutex;
 
-        Wombat::MamaDictionary *dictionary;
-
-        mamaBridge bridge;
-
-        Wombat::MamaSource* source;
-
-        std::string transport;
-
-        std::string sourceName;
-
-        std::string dictionarySource;
-
-        std::string dictionaryTransport;
-
-        std::string dictionaryMiddleware;
-
-        std::vector<std::string> middlewares;
-
-        std::vector<std::string> payloads;
-
-        std::map<std::string, OpenMamaStoreMessageListener*> openMamaStoreMessageListenerBySymbol;
+            // Configuration parameters
+            uint16_t configNumQueues;
+            std::string configTransport;
+            std::string configSourceName;
+            std::string configDictionarySource;
+            std::string configDictionaryTransport;
+            std::string configDictionaryMiddleware;
+            std::vector<std::string> configMiddlewares;
+            std::vector<std::string> configPayloads;
     };
 };
 

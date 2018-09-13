@@ -8,33 +8,33 @@
 #include <iostream>
 #include <mama/mamacpp.h>
 #include "../SubsystemOpenMama.h"
+#include <mamda/MamdaOrderBookFields.h>
+
 
 namespace cascadium {
     class OpenMamaDictionaryRequestor : public Wombat::MamaDictionaryCallback {
     public:
         explicit OpenMamaDictionaryRequestor(mamaBridge bridge)
-                : dictionary(nullptr), bridge(bridge), hasDictionary(false),
+                : bridge(bridge), hasDictionary(false),
                   logger(Poco::Logger::get(SUBSYSTEM_NAME_OPEN_MAMA)) {
 
         }
 
-        ~OpenMamaDictionaryRequestor() override {
-            delete dictionary;
-        }
-
         Wombat::MamaDictionary *requestDictionary(Wombat::MamaSource *source) {
-            dictionary = new Wombat::MamaDictionary;
+            auto * dictionary = new Wombat::MamaDictionary;
             dictionary->create(Wombat::Mama::getDefaultEventQueue(bridge), this, source);
 
             // This blocks until success or failure
             Wombat::Mama::start(bridge);
             if (!hasDictionary) {
                 logger.error("Failed to acquire a dictionary");
-                return nullptr;
+                delete dictionary;
+                dictionary = nullptr;
             } else {
                 logger.information("Returning acquired dictionary");
-                return dictionary;
+                Wombat::MamdaOrderBookFields::setDictionary(*dictionary);
             }
+            return dictionary;
         }
 
     private:
@@ -50,11 +50,11 @@ namespace cascadium {
         }
 
         void onComplete() override {
+            logger.error("Now have a dictionary!");
             hasDictionary = true;
             Wombat::Mama::stop(bridge);
         }
 
-        Wombat::MamaDictionary *dictionary;
         mamaBridge bridge;
         bool hasDictionary;
         Poco::Logger &logger;

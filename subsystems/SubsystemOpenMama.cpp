@@ -51,6 +51,7 @@ void setUpSubsystemOpenMamaLogCb(MamaLogLevel level, const char *message) {
         return;
     }
     Poco::Logger* logger = getSubsystemOpenMamaLogger();
+
     // Trim trailing newline since logger will add another
     const char* lastChar = message + strlen(message) - 1;
     if ('\n' == *lastChar) {
@@ -84,20 +85,52 @@ void setUpSubsystemOpenMamaLogCb(MamaLogLevel level, const char *message) {
     }
 }
 
+void SubsystemOpenMama::onStartComplete(MamaStatus status) {
+    logger.debug("OpenMAMA is closing");
+    ScopedLock<Mutex> scopedLock(listenerMapMutex);
+    logger.debug("Removing subscriptions");
+    for (auto& pair : openMamaStoreMessageListenerBySymbol) {
+        const string& symbol = pair.first;
+        OpenMamaStoreMessageListener* listener = pair.second;
+        MamdaSubscription* subscription = listener->getSubscription();
+        delete subscription;
+        delete listener;
+    }
+    MamaTransport* transport = source->getTransport();
+    delete source;
+    delete transport;
+    logger.debug("OpenMAMA is closed");
+}
+
 void SubsystemOpenMama::initialize(Poco::Util::Application &app) {
     logger.debug("Initializing the store subsystem");
     mama_setLogCallback2(setUpSubsystemOpenMamaLogCb);
     bridge = Mama::loadBridge("zmq");
+//    Mama::setLogLevel(MAMA_LOG_LEVEL_OFF);
     logger.information("Application has loaded %s bridge version: %s",
             string("zmq"),
             string(Mama::getVersion(bridge)));
-    Mama::open();
+    try {
+        Mama::open();
+    } catch (MamaStatus& status) {
+        logger.fatal("Found error: %s", string(status.toString()));
+    }
     source = new MamaSource("OPENMAMA", "sub", "OPENMAMA", bridge, true);
+
+    auto * dictionaryTransport = new MamaTransport();
+    dictionaryTransport->create("sub", bridge);
+    auto * dictionaryMamaSource = new MamaSource("WOMBAT", dictionaryTransport, "WOMBAT");
     OpenMamaDictionaryRequestor dictRequester (bridge);
-    dictionary = dictRequester.requestDictionary (new MamaSource("WOMBAT", "sub", "WOMBAT", bridge));
+    // Create the queue group
+    queueGroup = new MamaQueueGroup(configNumQueues, bridge);
+    dictionary = dictRequester.requestDictionary (dictionaryMamaSource);
+    // No longer need this MAMA source after dictionary retrieval so destroy here
+    delete dictionaryMamaSource;
+    delete dictionaryTransport;
     // Wait for first snapshot to land
     dictionarySemaphore.set();
-    Mama::start(bridge);
+
+    Mama::startBackground(bridge, this);
 }
 
 void SubsystemOpenMama::handleOption(const string &name, const string &value) {
@@ -120,10 +153,11 @@ void SubsystemOpenMama::handleOption(const string &name, const string &value) {
 }
 
 void SubsystemOpenMama::uninitialize() {
-    cerr << "Unitializing subsystem" << endl;
+    logger.debug("Stopping the OpenMAMA subsystem");
 }
 
 void SubsystemOpenMama::reinitialize(Poco::Util::Application &app) {
+    logger.debug("Reinitializing the OpenMAMA subsystem");
     Subsystem::reinitialize(app);
 }
 
@@ -135,7 +169,7 @@ void SubsystemOpenMama::defineOptions(Poco::Util::OptionSet &options) {
     options.addOption(middleware);
 
     Option transport(OPTION_NAME_OPENMAMA_TRANSPORT, "t",
-            "OpenMAMA transport. May be passed multiple times.");
+            "OpenMAMA configTransport. May be passed multiple times.");
     transport.required(false).repeatable(true).argument("STR");
     options.addOption(transport);
 
@@ -149,18 +183,25 @@ void SubsystemOpenMama::defineOptions(Poco::Util::OptionSet &options) {
     payload.required(false).repeatable(true).argument("STR");
     options.addOption(payload);
 
+    Option numQueues(OPTION_NAME_OPENMAMA_QUEUES,
+            "Number of queues to create in OpenMAMA subsystem.");
+    numQueues.required(false).repeatable(true).argument("NUM");
+    options.addOption(numQueues);
+
     Subsystem::defineOptions(options);
 }
 
 SubsystemOpenMama::SubsystemOpenMama() :
 logger(Poco::Logger::get(SUBSYSTEM_NAME_OPEN_MAMA)),
-dictionarySemaphore(1)
+dictionarySemaphore(1),
+dictionary(nullptr)
 {
     dictionarySemaphore.wait();
 }
 
 OpenMamaStoreMessageListener*
 SubsystemOpenMama::getOpenMamaStoreMessageListener(const std::string &symbol) {
+    ScopedLock<Mutex> scopedLock(listenerMapMutex);
     auto existingIt = openMamaStoreMessageListenerBySymbol.find(symbol);
     OpenMamaStoreMessageListener* result = nullptr;
     // If there is no current record for this symbol, create it
@@ -171,13 +212,14 @@ SubsystemOpenMama::getOpenMamaStoreMessageListener(const std::string &symbol) {
         subscription->addMsgListener((MamdaMsgListener*)result);
         subscription->addErrorListener((MamdaErrorListener*)result);
         subscription->addQualityListener((MamdaQualityListener*)result);
-        subscription->setTimeout(3.0);
         subscription->setRequireInitial(true);
+
+        // Sadly the only current way to distinguish
         if(symbol.c_str()[0] == 'b') {
-            logger.information("Reusing existing listener for %s", symbol);
             subscription->setType(MAMA_SUBSC_TYPE_BOOK);
         }
-        subscription->create(Mama::getDefaultEventQueue(bridge), source, symbol.c_str(), (void*)this);
+        result->setSubscription(subscription);
+        subscription->create(queueGroup->getNextQueue(), source, symbol.c_str(), (void*)this);
         openMamaStoreMessageListenerBySymbol[symbol] = result;
     } else {
         logger.information("Reusing existing listener for %s", symbol);
@@ -192,74 +234,55 @@ SubsystemOpenMama::getSnapshotAsJson(const std::string &symbol) {
         logger.error("Cannot acquire a snapshot - do not yet have a dictionary");
         return string();
     }
+
     // The below will happen in a function call rather than here
+    logger.debug("Getting message listener for %s", symbol);
     auto* listener = getOpenMamaStoreMessageListener(symbol);
+
+    logger.debug("Getting snapshot from listener for %s", symbol);
     MamaMsg* snapshot = listener->getSnapshot();
+
+    logger.debug("Getting underlying message for %s", symbol);
     mamaMsg msg = snapshot->getUnderlyingMsg();
+
+    logger.debug("Getting json string for %s", symbol);
     string snapshotAsJson = string(mamaMsg_toJsonStringWithDictionary(msg, dictionary->getDictC()));
+
+    // Clean up the snapshot message - we own this memory
     delete snapshot;
+
     return snapshotAsJson;
 }
 
 SubsystemOpenMama::~SubsystemOpenMama() {
-
-    cerr << "IN DESCRUCTOR FOR OPENMAMA" << endl;
-    // Stop dispatch
-    if (nullptr != bridge) {
-        Mama::stop(bridge);
-    } else {
-        return;
-    }
-
-//    if (mQueueGroup != NULL)
-//    {
-//        mQueueGroup->stopDispatch();
-//    }
-
+    logger.debug("Destroying OpenMAMA subsystem");
     delete dictionary;
 
-    class : public MamaSubscriptionIteratorCallback {
-    public:
-        void onSubscription(MamaSource *source, MamaSubscription *subscription, void *closure) override {
-            cerr << "Removing subscription to topic: " << subscription->getSymbol() << endl;
-            subscription->destroy();
-            delete subscription;
+    // Stop dispatching (blocks until complete)
+    if (nullptr != bridge) {
+        // Stop the application instance
+        Mama::stop(bridge);
+
+        // Destroy the queue group, this must be done after everything using the queues has been destroyed
+        if (queueGroup != NULL)
+        {
+            // Destroy all the queues and wait until everything has been cleaned up
+            queueGroup->stopDispatch();
+            queueGroup->destroyWait();
+            delete queueGroup;
+            queueGroup = NULL;
         }
-    } subscriptionScrubber;
-    cerr << "Iterating subscriptions" << endl;
-    source->forEachSubscription(&subscriptionScrubber, nullptr);
-    MamaTransport* transport = source->getTransport();
-    delete transport;
-    delete source;
 
-//    // Destroy the queue group, this must be done after everything using the queues has been destroyed
-//    if (mQueueGroup != NULL)
-//    {
-//        // Destroy all the queues and wait until everything has been cleaned up
-//        mQueueGroup->destroyWait();
-//        delete mQueueGroup;
-//        mQueueGroup = NULL;
-//    }
-//
-//    if ((mDictTransport !=  NULL)  && (mDictTransport  != mTransport))
-//    {
-//        delete mDictTransport;
-//        mDictTransport = NULL;
-//    }
-//
-//    if (mTransport != NULL)
-//    {
-//        delete mTransport;
-//        mTransport = NULL;
-//    }
-
-    Mama::close();
+        // Clean up after MAMA
+        Mama::close();
+    }
 }
 
 Wombat::MamaDictionary *SubsystemOpenMama::getDictionary() {
     if (nullptr == this->dictionary) {
         logger.information("Waiting for dictionary...");
         dictionarySemaphore.wait();
+        logger.information("Dictionary obtained");
     }
     return this->dictionary;
 }
