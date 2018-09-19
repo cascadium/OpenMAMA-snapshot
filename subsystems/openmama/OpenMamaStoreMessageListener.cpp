@@ -45,7 +45,8 @@ public:
     }
 };
 
-OpenMamaStoreMessageListener::OpenMamaStoreMessageListener(SubsystemOpenMama* subsystemOpenMamaStore) :
+OpenMamaStoreMessageListener::OpenMamaStoreMessageListener(SubsystemOpenMama* subsystemOpenMamaStore,
+        mamaPayloadBridge defaultPayloadBridge) :
         logger(Poco::Logger::get(SUBSYSTEM_NAME_OPEN_MAMA))
         , initialResponseSemaphore(1)
         , hasReceivedSnapshot(false)
@@ -62,6 +63,7 @@ OpenMamaStoreMessageListener::OpenMamaStoreMessageListener(SubsystemOpenMama* su
     orderBookListener = new MamdaOrderBookListener(orderBookCache);
     orderBookListener->addHandler(new OpenMamaStoreMessageListenerOrderBookHandler());
     this->subsystemOpenMamaStore = subsystemOpenMamaStore;
+    this->defaultPayloadBridge = defaultPayloadBridge;
 }
 
 void OpenMamaStoreMessageListener::onMsg(MamdaSubscription *subscription, const MamaMsg &msg, short msgType) {
@@ -125,20 +127,27 @@ void OpenMamaStoreMessageListener::onMsg(MamdaSubscription *subscription, const 
 
 void OpenMamaStoreMessageListener::onError(MamdaSubscription *subscription, MamdaErrorSeverity severity, MamdaErrorCode errorCode,
              const char *errorStr) {
-    logger.debug("In the MAMDA subscription callback onError");
+    logger.error("In the MAMDA subscription callback onError");
+    // The wait is over - remorsefully unblock callers
+    initialResponseSemaphore.set();
 }
 
 void OpenMamaStoreMessageListener::onQuality(MamdaSubscription *subscription, mamaQuality quality) {
-    logger.debug("In the MAMDA subscription callback onQuality");
+    logger.warning("In the MAMDA subscription callback onQuality");
 }
 
 MamaMsg* OpenMamaStoreMessageListener::getSnapshot() {
     auto *msg = new MamaMsg();
-    mamaPayloadBridge plb = Mama::loadPayloadBridge("qpidmsg");
-    msg->createForPayloadBridge(plb);
+    msg->createForPayloadBridge(this->defaultPayloadBridge);
     if (!hasReceivedSnapshot) {
         // Wait for first snapshot to land
         initialResponseSemaphore.wait();
+    }
+
+    // If there is still no snapshot, return null and let caller delete this object
+    if (!hasReceivedSnapshot) {
+        delete msg;
+        return nullptr;
     }
 
     if (isOrderBookSubscription) {
@@ -167,3 +176,4 @@ OpenMamaStoreMessageListener::~OpenMamaStoreMessageListener() {
     delete orderBookCache;
     delete orderBookListener;
 }
+

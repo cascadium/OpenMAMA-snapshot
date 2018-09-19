@@ -108,12 +108,12 @@ void MainApplication::defineOptions(Poco::Util::OptionSet &options) {
     options.addOption(help);
 
     // Only add option if not already specified elsewhere
-    Option verbose(OPTION_NAME_INCREASE_VERBOSITY, "v", "Increase verbosity (may be passed up to 7 times.");
+    Option verbose(OPTION_NAME_INCREASE_VERBOSITY, "v", "Increase verbosity (may be passed up to 4 times.");
     verbose.required(false).repeatable(true);
     options.addOption(verbose);
 
     // Only add option if not already specified elsewhere
-    Option quiet(OPTION_NAME_DECREASE_VERBOSITY, "q", "Decrease verbosity (may be passed up to 7 times.");
+    Option quiet(OPTION_NAME_DECREASE_VERBOSITY, "q", "Decrease verbosity (may be passed up to 4 times.");
     quiet.required(false).repeatable(true);
     options.addOption(quiet);
 

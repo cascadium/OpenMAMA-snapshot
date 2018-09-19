@@ -14,5 +14,8 @@
 #define OPTION_NAME_OPENMAMA_TRANSPORT          "transport"
 #define OPTION_NAME_OPENMAMA_PAYLOAD            "payload"
 #define OPTION_NAME_OPENMAMA_QUEUES             "queues"
+#define OPTION_NAME_OPENMAMA_DICT_TRANSPORT     "dict-tport"
+#define OPTION_NAME_OPENMAMA_DICT_SOURCE        "dict-source"
+#define OPTION_NAME_OPENMAMA_DICT_MIDDLEWARE    "dict-middleware"
 
 #endif //OPENMAMA_SNAPSHOT_OPTIONNAMES_H

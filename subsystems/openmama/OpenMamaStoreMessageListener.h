@@ -20,8 +20,10 @@ namespace cascadium {
     class OpenMamaStoreMessageListener
             : public Wombat::MamdaMsgListener, Wombat::MamdaErrorListener, Wombat::MamdaQualityListener {
     public:
-        explicit OpenMamaStoreMessageListener(SubsystemOpenMama *subsystemOpenMamaStore);
-        ~OpenMamaStoreMessageListener();
+        explicit OpenMamaStoreMessageListener(SubsystemOpenMama *subsystemOpenMamaStore,
+                mamaPayloadBridge defaultPayloadBridge);
+
+        ~OpenMamaStoreMessageListener() override;
 
         void onMsg(Wombat::MamdaSubscription *subscription, const Wombat::MamaMsg &msg, short msgType) override;
 
@@ -48,6 +50,7 @@ namespace cascadium {
         bool hasReceivedSnapshot;
         bool isOrderBookSubscription;
         Wombat::MamdaSubscription* subscription;
+        mamaPayloadBridge defaultPayloadBridge;
     };
 }
 

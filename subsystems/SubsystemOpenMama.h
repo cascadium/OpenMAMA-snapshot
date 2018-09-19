@@ -11,6 +11,7 @@
 #include <Poco/Logger.h>
 #include <Poco/Semaphore.h>
 #include <map>
+#include <set>
 #include "SubsystemCommon.h"
 #include <mama/MamaDictionary.h>
 
@@ -28,6 +29,8 @@ namespace cascadium {
 
             // Blocking call to acquire a snapshot of a symbol. Will raise a TimeoutException on timeout.
             std::string getSnapshotAsJson(const std::string &symbol);
+
+            std::string removeOpenMamaStoreMessageListener(const std::string& symbol);
 
             OpenMamaStoreMessageListener* getOpenMamaStoreMessageListener(const std::string &symbol);
 
@@ -55,21 +58,23 @@ namespace cascadium {
             Poco::Logger &logger;
             Wombat::MamaDictionary * dictionary;
             mamaBridge bridge;
-            std::vector<mamaBridge> bridges;
+            std::set<mamaPayloadBridge> payloadBridges;
             Wombat::MamaSource * source;
             std::map<std::string, OpenMamaStoreMessageListener *> openMamaStoreMessageListenerBySymbol;
             Wombat::MamaQueueGroup * queueGroup;
             Poco::Mutex listenerMapMutex;
+            mamaPayloadBridge defaultPayloadBridge;
 
             // Configuration parameters
-            uint16_t configNumQueues;
+            unsigned int configNumQueues;
             std::string configTransport;
             std::string configSourceName;
             std::string configDictionarySource;
             std::string configDictionaryTransport;
             std::string configDictionaryMiddleware;
-            std::vector<std::string> configMiddlewares;
-            std::vector<std::string> configPayloads;
+            std::string configMiddleware;
+            std::set<std::string> configPayloads;
+            int configVerbosity;
     };
 };
 

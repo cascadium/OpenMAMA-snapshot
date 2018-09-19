@@ -11,6 +11,7 @@
 #include <Poco/JSON/Object.h>
 #include <Poco/JSON/Stringifier.h>
 #include <Poco/DynamicStruct.h>
+#include <Poco/NumberParser.h>
 #include <mama/mamacpp.h>
 #include <mama/log.h>
 #include <mamda/MamdaSubscription.h>
@@ -26,6 +27,7 @@
 #include "openmama/OpenMamaDictionaryRequestor.h"
 #include "openmama/OpenMamaStoreMessageListener.h"
 #include <map>
+#include "../MainApplication.h"
 
 
 using namespace std;
@@ -104,51 +106,194 @@ void SubsystemOpenMama::onStartComplete(MamaStatus status) {
 
 void SubsystemOpenMama::initialize(Poco::Util::Application &app) {
     logger.debug("Initializing the store subsystem");
-    mama_setLogCallback2(setUpSubsystemOpenMamaLogCb);
-    bridge = Mama::loadBridge("zmq");
-//    Mama::setLogLevel(MAMA_LOG_LEVEL_OFF);
-    logger.information("Application has loaded %s bridge version: %s",
-            string("zmq"),
-            string(Mama::getVersion(bridge)));
+
+    // Clear state tracking containers
+    payloadBridges.clear();
+    openMamaStoreMessageListenerBySymbol.clear();
+    defaultPayloadBridge = nullptr;
+
+    // Initialize log levels
+    switch(configVerbosity) {
+        case -5:
+            Mama::setLogLevel(MamaLogLevel::MAMA_LOG_LEVEL_OFF);
+            logger.setLevel("none");
+            break;
+        case -4:
+            Mama::setLogLevel(MamaLogLevel::MAMA_LOG_LEVEL_OFF);
+            logger.setLevel("fatal");
+            break;
+        case -3:
+            Mama::setLogLevel(MamaLogLevel::MAMA_LOG_LEVEL_OFF);
+            logger.setLevel("critical");
+            break;
+        case -2:
+            Mama::setLogLevel(MamaLogLevel::MAMA_LOG_LEVEL_SEVERE);
+            logger.setLevel("error");
+            break;
+        case -1:
+            Mama::setLogLevel(MamaLogLevel::MAMA_LOG_LEVEL_ERROR);
+            logger.setLevel("warning");
+            break;
+        case 0:
+            Mama::setLogLevel(MamaLogLevel::MAMA_LOG_LEVEL_WARN);
+            logger.setLevel("notice");
+            break;
+        case 1:
+            Mama::setLogLevel(MamaLogLevel::MAMA_LOG_LEVEL_NORMAL);
+            logger.setLevel("information");
+            break;
+        case 2:
+            Mama::setLogLevel(MamaLogLevel::MAMA_LOG_LEVEL_FINE);
+            logger.setLevel("debug");
+            break;
+        case 3:
+            Mama::setLogLevel(MamaLogLevel::MAMA_LOG_LEVEL_FINER);
+            logger.setLevel("trace");
+            break;
+        case 4:
+            Mama::setLogLevel(MamaLogLevel::MAMA_LOG_LEVEL_FINEST);
+            logger.setLevel("trace");
+            break;
+        default:
+            if (configVerbosity > 0) {
+                Mama::setLogLevel(MamaLogLevel::MAMA_LOG_LEVEL_FINEST);
+                logger.setLevel("trace");
+            } else {
+                Mama::setLogLevel(MamaLogLevel::MAMA_LOG_LEVEL_OFF);
+                logger.setLevel("none");
+            }
+            break;
+    }
+
+    // Load the OpenMAMA middleware bridge
     try {
+        logger.information("Loading OpenMAMA middleware bridge '%s'", configMiddleware);
+        bridge = Mama::loadBridge(configMiddleware.c_str());
+    } catch (MamaStatus& status) {
+        logger.fatal("Failed to initialize SubsystemOpenMama: Cannot load '%s' middleware bridge (%s)",
+                     configMiddleware, string(status.toString()));
+        return;
+    }
+
+    // Load the OpenMAMA payload bridges
+    for (auto& payload: configPayloads) {
+        try {
+            logger.information("Loading %s payload bridge", payload);
+            mamaPayloadBridge payloadBridge = Mama::loadPayloadBridge(payload.c_str());
+            payloadBridges.insert(payloadBridge);
+            if (nullptr == defaultPayloadBridge) {
+                defaultPayloadBridge = payloadBridge;
+            }
+
+        } catch (MamaStatus &status) {
+            logger.information("Failed to load '%s' payload bridge", payload);
+        }
+    }
+
+    // If no payload bridges loaded successfully, this is a fatal error
+    if (payloadBridges.empty()) {
+        logger.fatal("Failed to initialize SubsystemOpenMama: Cannot find or load any payload bridges");
+        return;
+    }
+
+    // Call OpenMAMA open
+    try {
+        logger.information("Opening main OpenMAMA resources");
         Mama::open();
     } catch (MamaStatus& status) {
-        logger.fatal("Found error: %s", string(status.toString()));
+        logger.fatal("Failed to initialize SubsystemOpenMama: Cannot open OpenMAMA resources (%s)",
+                string(status.toString()));
+        return;
     }
-    source = new MamaSource("OPENMAMA", "sub", "OPENMAMA", bridge, true);
 
-    auto * dictionaryTransport = new MamaTransport();
-    dictionaryTransport->create("sub", bridge);
-    auto * dictionaryMamaSource = new MamaSource("WOMBAT", dictionaryTransport, "WOMBAT");
-    OpenMamaDictionaryRequestor dictRequester (bridge);
+    // Fetch the dictionary
+    try {
+        logger.information("Initializing the OpenMAMA dictionary transport %s", configDictionaryTransport);
+        auto * dictionaryTransport = new MamaTransport();
+        dictionaryTransport->create(configDictionaryTransport.c_str(), bridge);
+
+        logger.information("Initializing the OpenMAMA dictionary source %s", configDictionarySource);
+        auto * dictionaryMamaSource = new MamaSource(configDictionarySource.c_str(), dictionaryTransport,
+                configDictionarySource.c_str());
+        OpenMamaDictionaryRequestor dictRequester (bridge);
+
+        // Go fetch the dictionary
+        logger.information("Fetching the OpenMAMA dictionary");
+        dictionary = dictRequester.requestDictionary (dictionaryMamaSource);
+
+        // Clean up after retrieving dictionary
+        logger.information("Cleaning up temporary OpenMAMA dictionary resources");
+        delete dictionaryMamaSource;
+        delete dictionaryTransport;
+
+        // Throw exception if request timed out without a response
+        if (nullptr == dictionary) {
+            throw Wombat::MamaStatus(MAMA_STATUS_NOT_FOUND);
+        }
+
+        // Getting this far means success - mark the semaphore as non-zero to signify dictionary is ready
+        dictionarySemaphore.set();
+    } catch (MamaStatus& status) {
+        logger.fatal("Failed to initialize SubsystemOpenMama: Cannot find dictionary (%s)", string(status.toString()));
+        return;
+    }
+
+    // Create the OpenMAMA source
+    try {
+        logger.information("Creating the OpenMAMA subscription source transport: %s, source: %s",
+                configTransport, configSourceName);
+        source = new MamaSource(configSourceName.c_str(), configTransport.c_str(), configSourceName.c_str(), bridge,
+                true);
+    } catch (MamaStatus& status) {
+        logger.fatal("Failed to initialize SubsystemOpenMama: Cannot initialize requested OpenMAMA data source (%s)",
+                string(status.toString()));
+        return;
+    }
+
     // Create the queue group
-    queueGroup = new MamaQueueGroup(configNumQueues, bridge);
-    dictionary = dictRequester.requestDictionary (dictionaryMamaSource);
-    // No longer need this MAMA source after dictionary retrieval so destroy here
-    delete dictionaryMamaSource;
-    delete dictionaryTransport;
-    // Wait for first snapshot to land
-    dictionarySemaphore.set();
+    try {
+        logger.information("Creating an OpenMAMA queue group with %u queues", configNumQueues);
+        queueGroup = new MamaQueueGroup(configNumQueues, bridge);
+    } catch (MamaStatus& status) {
+        logger.fatal("Failed to initialize SubsystemOpenMama: Cannot initialize OpenMAMA Queue group (%s)",
+                     string(status.toString()));
+        return;
+    }
 
-    Mama::startBackground(bridge, this);
+    // Fire up OpenMAMA
+    try {
+        logger.information("Starting dispatch for OpenMAMA on %u queues", configNumQueues);
+        Mama::startBackground(bridge, this);
+        logger.notice("OpenMAMA initialized - ready for requests", configNumQueues);
+    } catch (MamaStatus& status) {
+        logger.fatal("Failed to initialize SubsystemOpenMama: Cannot start OpenMAMA (%s)",
+                     string(status.toString()));
+        return;
+    }
+
 }
 
 void SubsystemOpenMama::handleOption(const string &name, const string &value) {
     if (name == OPTION_NAME_INCREASE_VERBOSITY) {
-        logger.setLevel(logger.getLevel() + 1);
-        int newLevel = (int) Mama::getLogLevel() + 1;
-        Mama::setLogLevel(
-                (MamaLogLevel) (newLevel > MamaLogLevel::MAMA_LOG_LEVEL_FINEST ? MamaLogLevel::MAMA_LOG_LEVEL_FINEST
-                                                                               : newLevel));
+        configVerbosity++;
     } else if (name == OPTION_NAME_DECREASE_VERBOSITY) {
-        logger.setLevel(logger.getLevel() - 1);
-        int newLevel = (int) Mama::getLogLevel() - 1;
-        Mama::setLogLevel((MamaLogLevel) (newLevel < MamaLogLevel::MAMA_LOG_LEVEL_OFF ? MamaLogLevel::MAMA_LOG_LEVEL_OFF
-                                                                                      : newLevel));
+        configVerbosity--;
     } else if (name == OPTION_NAME_OPENMAMA_MIDDLEWARE) {
+        configMiddleware = value;
     } else if (name == OPTION_NAME_OPENMAMA_SOURCE) {
+        configSourceName = value;
     } else if (name == OPTION_NAME_OPENMAMA_TRANSPORT) {
+        configTransport = value;
     } else if (name == OPTION_NAME_OPENMAMA_PAYLOAD) {
+        configPayloads.insert(value);
+    } else if (name == OPTION_NAME_OPENMAMA_QUEUES) {
+        configNumQueues = NumberParser::parseUnsigned(value);
+    } else if (name == OPTION_NAME_OPENMAMA_DICT_MIDDLEWARE) {
+        configDictionaryMiddleware = value;
+    } else if (name == OPTION_NAME_OPENMAMA_DICT_SOURCE) {
+        configDictionarySource = value;
+    } else if (name == OPTION_NAME_OPENMAMA_DICT_TRANSPORT) {
+        configDictionaryTransport = value;
     }
 }
 
@@ -164,18 +309,18 @@ void SubsystemOpenMama::reinitialize(Poco::Util::Application &app) {
 void SubsystemOpenMama::defineOptions(Poco::Util::OptionSet &options) {
 
     Option middleware(OPTION_NAME_OPENMAMA_MIDDLEWARE, "m",
-            "OpenMAMA middleware. May be passed multiple times.");
-    middleware.required(false).repeatable(true).argument("STR");
+            "OpenMAMA middleware to use.");
+    middleware.required(false).repeatable(false).argument("STR");
     options.addOption(middleware);
 
     Option transport(OPTION_NAME_OPENMAMA_TRANSPORT, "t",
-            "OpenMAMA configTransport. May be passed multiple times.");
-    transport.required(false).repeatable(true).argument("STR");
+            "OpenMAMA transport name to use.");
+    transport.required(false).repeatable(false).argument("STR");
     options.addOption(transport);
 
     Option source(OPTION_NAME_OPENMAMA_SOURCE, "S",
-            "OpenMAMA source / prefix. May be passed multiple times.");
-    source.required(false).repeatable(true).argument("STR");
+            "OpenMAMA source / prefix to use.");
+    source.required(false).repeatable(false).argument("STR");
     options.addOption(source);
 
     Option payload(OPTION_NAME_OPENMAMA_PAYLOAD, "p",
@@ -188,15 +333,46 @@ void SubsystemOpenMama::defineOptions(Poco::Util::OptionSet &options) {
     numQueues.required(false).repeatable(true).argument("NUM");
     options.addOption(numQueues);
 
+    Option dictMiddleware(OPTION_NAME_OPENMAMA_DICT_MIDDLEWARE,
+             "OpenMAMA middleware to use for dictionary if different from application's middleware.");
+    dictMiddleware.required(false).repeatable(true).argument("STR");
+    options.addOption(dictMiddleware);
+
+    Option dictSource(OPTION_NAME_OPENMAMA_DICT_SOURCE,
+             "OpenMAMA source / prefix to use for dictionary (Default: WOMBAT).");
+    dictSource.required(false).repeatable(true).argument("STR");
+    options.addOption(dictSource);
+
+    Option dictTransport(OPTION_NAME_OPENMAMA_DICT_TRANSPORT,
+             "OpenMAMA transport to use for dictionary if different from application's transport.");
+    dictTransport.required(false).repeatable(true).argument("STR");
+    options.addOption(dictTransport);
+
     Subsystem::defineOptions(options);
 }
 
 SubsystemOpenMama::SubsystemOpenMama() :
 logger(Poco::Logger::get(SUBSYSTEM_NAME_OPEN_MAMA)),
 dictionarySemaphore(1),
-dictionary(nullptr)
+dictionary(nullptr),
+defaultPayloadBridge(nullptr)
 {
+    // Immediately decrement the semaphore. Must be constructed with non zero so to make zero, need to do here
     dictionarySemaphore.wait();
+
+    // Set default configurable values
+    configNumQueues = 1;
+    configMiddleware = "zmq";
+    configTransport = "sub";
+    configSourceName = "OPENMAMA";
+    configDictionarySource = "WOMBAT";
+    configDictionaryTransport = configTransport;
+    configDictionaryMiddleware = configMiddleware;
+    configPayloads = {"qpidmsg", "omnmmsg"};
+    configVerbosity = 0;
+
+    // Set up MAMA log callbacks now
+    mama_setLogCallback2(setUpSubsystemOpenMamaLogCb);
 }
 
 OpenMamaStoreMessageListener*
@@ -207,7 +383,7 @@ SubsystemOpenMama::getOpenMamaStoreMessageListener(const std::string &symbol) {
     // If there is no current record for this symbol, create it
     if (existingIt == openMamaStoreMessageListenerBySymbol.end()) {
         logger.information("Creating new listener for %s", symbol);
-        result = new OpenMamaStoreMessageListener(this);
+        result = new OpenMamaStoreMessageListener(this, this->defaultPayloadBridge);
         auto * subscription = new MamdaSubscription();
         subscription->addMsgListener((MamdaMsgListener*)result);
         subscription->addErrorListener((MamdaErrorListener*)result);
@@ -229,6 +405,15 @@ SubsystemOpenMama::getOpenMamaStoreMessageListener(const std::string &symbol) {
 }
 
 std::string
+SubsystemOpenMama::removeOpenMamaStoreMessageListener(const string& symbol) {
+    ScopedLock<Mutex> scopedLock(listenerMapMutex);
+    auto existingIt = openMamaStoreMessageListenerBySymbol.find(symbol);
+    if (existingIt != openMamaStoreMessageListenerBySymbol.end()) {
+        openMamaStoreMessageListenerBySymbol.erase(symbol);
+    }
+}
+
+std::string
 SubsystemOpenMama::getSnapshotAsJson(const std::string &symbol) {
     if (nullptr == dictionary) {
         logger.error("Cannot acquire a snapshot - do not yet have a dictionary");
@@ -241,6 +426,12 @@ SubsystemOpenMama::getSnapshotAsJson(const std::string &symbol) {
 
     logger.debug("Getting snapshot from listener for %s", symbol);
     MamaMsg* snapshot = listener->getSnapshot();
+
+    if (nullptr == snapshot) {
+        removeOpenMamaStoreMessageListener(symbol);
+        delete listener;
+        throw NotFoundException("Could not establish a MAMA subscription");
+    }
 
     logger.debug("Getting underlying message for %s", symbol);
     mamaMsg msg = snapshot->getUnderlyingMsg();
@@ -278,6 +469,7 @@ SubsystemOpenMama::~SubsystemOpenMama() {
     }
 }
 
+// It is possible this method may be called before the initialization is complete. If so, wait.
 Wombat::MamaDictionary *SubsystemOpenMama::getDictionary() {
     if (nullptr == this->dictionary) {
         logger.information("Waiting for dictionary...");
