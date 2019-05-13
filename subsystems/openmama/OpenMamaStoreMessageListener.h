@@ -40,6 +40,8 @@ namespace cascadium {
 
         Wombat::MamdaSubscription* getSubscription();
 
+        long getEventCount();
+
     private:
         Poco::Logger &logger;
         SubsystemOpenMama *subsystemOpenMamaStore;
@@ -51,6 +53,7 @@ namespace cascadium {
         bool isOrderBookSubscription;
         Wombat::MamdaSubscription* subscription;
         mamaPayloadBridge defaultPayloadBridge;
+        long eventCount;
     };
 }
 

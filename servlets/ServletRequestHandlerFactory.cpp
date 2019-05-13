@@ -4,6 +4,7 @@
 
 #include "ServletRequestHandlerFactory.h"
 #include "ServletOpenMamaSnapshot.h"
+#include "ServletOpenMamaServerSentEvents.h"
 #include <iostream>
 #include <Poco/Net/HTTPResponse.h>
 
@@ -27,8 +28,10 @@ private:
 };
 
 HTTPRequestHandler* ServletRequestHandlerFactory::createRequestHandler(const HTTPServerRequest& request) {
-    if (0 == icompare(std::string("/snapshots"), request.getURI().substr(0,10)))
+    if (0 == icompare(std::string("/snapshots"), request.getURI().substr(0, 10)))
         return new ServletOpenMamaSnapshot;
+    if (0 == icompare(std::string("/stream"), request.getURI().substr(0, 7)))
+        return new ServletOpenMamaServerSentEvents;
     else
         return new ServletReturnHttpStatus(HTTPResponse::HTTP_NOT_FOUND);
 }

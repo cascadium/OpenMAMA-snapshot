@@ -21,10 +21,15 @@ add_executable(cascadium-snapshot
         subsystems/openmama/OpenMamaDictionaryRequestor.h
         subsystems/openmama/OpenMamaStoreMessageListener.cpp
         subsystems/openmama/OpenMamaStoreMessageListener.h
+        servlets/ServletOpenMamaServerSentEvents.cpp
+        servlets/ServletOpenMamaServerSentEvents.h
         servlets/ServletOpenMamaSnapshot.cpp
         servlets/ServletOpenMamaSnapshot.h
         servlets/ServletRequestHandlerFactory.cpp
-        servlets/ServletRequestHandlerFactory.h OptionNames.h subsystems/SubsystemCommon.h)
+        servlets/ServletRequestHandlerFactory.h
+        OptionNames.h
+        subsystems/SubsystemCommon.h
+)
 
 #target_link_libraries(cascadium-snapshot
 #        libmamacmd

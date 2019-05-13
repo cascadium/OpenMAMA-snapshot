@@ -28,7 +28,7 @@ namespace cascadium {
             Wombat::MamaDictionary *getDictionary();
 
             // Blocking call to acquire a snapshot of a symbol. Will raise a TimeoutException on timeout.
-            std::string getSnapshotAsJson(const std::string &symbol);
+            std::string getSnapshotAsJson(const std::string &symbol, long& eventCount);
 
             std::string removeOpenMamaStoreMessageListener(const std::string& symbol);
 

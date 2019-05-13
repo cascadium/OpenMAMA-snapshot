@@ -414,7 +414,7 @@ SubsystemOpenMama::removeOpenMamaStoreMessageListener(const string& symbol) {
 }
 
 std::string
-SubsystemOpenMama::getSnapshotAsJson(const std::string &symbol) {
+SubsystemOpenMama::getSnapshotAsJson(const std::string &symbol, long &eventCount) {
     if (nullptr == dictionary) {
         logger.error("Cannot acquire a snapshot - do not yet have a dictionary");
         return string();
@@ -441,6 +441,8 @@ SubsystemOpenMama::getSnapshotAsJson(const std::string &symbol) {
 
     // Clean up the snapshot message - we own this memory
     delete snapshot;
+
+    eventCount = listener->getEventCount();
 
     return snapshotAsJson;
 }

@@ -51,6 +51,7 @@ OpenMamaStoreMessageListener::OpenMamaStoreMessageListener(SubsystemOpenMama* su
         , initialResponseSemaphore(1)
         , hasReceivedSnapshot(false)
         , isOrderBookSubscription(false)
+        , eventCount(0)
 {
     lastValueCache = new MamaFieldCache();
     lastValueCache->setUseLock(true);
@@ -123,6 +124,11 @@ void OpenMamaStoreMessageListener::onMsg(MamdaSubscription *subscription, const 
             logger.warning("Unexpected message type [%d]: ignoring update", (int)msgType);
             break;
     }
+    eventCount++;
+}
+
+long OpenMamaStoreMessageListener::getEventCount() {
+    return eventCount;
 }
 
 void OpenMamaStoreMessageListener::onError(MamdaSubscription *subscription, MamdaErrorSeverity severity, MamdaErrorCode errorCode,

@@ -1,11 +1,11 @@
-# Cascadium Agent
+# Cascadium Node
 
-The Cascadium Agent is a high performance caching and distribution application capable
+The Cascadium Node is a high performance caching and distribution application capable
 of publishing and storing state for market data streams over standard HTTP Protocols.
 
 ## Features
 
-The Cascadium Agent is under continuous development, but it is currently capable of:
+The Cascadium Node is under continuous development, but it is currently capable of:
 
 * Subscribing on-demand to OpenMAMA market data publishers over REST
 * Using the OpenMAMA data dictionary to generate json output including field names
@@ -15,8 +15,7 @@ The Cascadium Agent is under continuous development, but it is currently capable
 
 There is only one edition.
 
-This is not crippleware - everyone is free to use this software with 100% functionailty
-and no license keys involved.
+Everyone is free to use this software with 100% functionailty and no license keys involved.
 
 ## Roadmap
 
