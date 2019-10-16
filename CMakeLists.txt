@@ -18,7 +18,8 @@ add_executable(cascadium-snapshot
         subsystems/SubsystemServletRouter.cpp
         subsystems/SubsystemServletRouter.h
         subsystems/SubsystemOpenMama.cpp
-        subsystems/SubsystemOpenMama.h
+        subsystems/SubsystemOpenMama.h:x
+
         subsystems/openmama/OpenMamaDictionaryRequestor.h
         subsystems/openmama/OpenMamaStoreMessageListener.cpp
         subsystems/openmama/OpenMamaStoreMessageListener.h
