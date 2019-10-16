@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.0)
 project(OpenMAMA_snapshot)
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
 set(CMAKE_CXX_STANDARD 14)
-
-set(OPENMAMA_ROOT /home/fquinn/SourceExternal/github/fquinner/OpenMAMA/build/install)
-
+set(OPENMAMA_ROOT /opt/openmama)
+message("OPENMAMA_ROOT=${OPENMAMA_ROOT}")
 find_package(Poco REQUIRED Foundation Util Net)
 include_directories("${OPENMAMA_ROOT}/include")
 include_directories(.)
@@ -14,6 +14,7 @@ add_executable(cascadium-snapshot
         main.cpp
         MainApplication.cpp
         MainApplication.h
+        OptionNames.h
         subsystems/SubsystemServletRouter.cpp
         subsystems/SubsystemServletRouter.h
         subsystems/SubsystemOpenMama.cpp
@@ -27,24 +28,14 @@ add_executable(cascadium-snapshot
         servlets/ServletOpenMamaSnapshot.h
         servlets/ServletRequestHandlerFactory.cpp
         servlets/ServletRequestHandlerFactory.h
-        OptionNames.h
         subsystems/SubsystemCommon.h
 )
-
-#target_link_libraries(cascadium-snapshot
-#        libmamacmd
-#        libmamacppmd
-#        libmamdamd
-#        libmamdabookmd
-#        Poco::Foundation
-#        Poco::Util
-#        Poco::Net)
 
 target_link_libraries(cascadium-snapshot
         mama
         mamacpp
         mamda
         mamdabook
-        Poco::Foundation
-        Poco::Util
-        Poco::Net)
+        ${Poco_Foundation_LIBRARY}
+        ${Poco_Util_LIBRARY}
+        ${Poco_Net_LIBRARY})

@@ -48,11 +48,13 @@
 #
 # Author: Andreas Stahl andreas.stahl@tu-dresden.de
 
+
 set(Poco_HINTS
+	${Poco_DIR}
+	$ENV{Poco_DIR}
+	/usr
 	/usr/local
 	C:/AppliedInformatics
-	${Poco_DIR} 
-	$ENV{Poco_DIR}
 )
 
 if(NOT Poco_ROOT_DIR)
