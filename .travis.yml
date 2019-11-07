@@ -17,4 +17,4 @@ before_install:
 script:
  - (mkdir gtest_bld && cd gtest_bld && cmake /usr/src/googletest/googletest -DCMAKE_INSTALL_PREFIX=/usr && sudo make install)
  - cmake -DCMAKE_INSTALL_PREFIX=$(pwd) .
- - make install
+ - make
