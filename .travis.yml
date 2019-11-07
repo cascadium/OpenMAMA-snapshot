@@ -1,0 +1,20 @@
+language: c
+dist: bionic
+
+# notifications:
+#   webhooks:
+#     urls:
+#       - https://webhooks.gitter.im/e/1165d088c0b8da252a52
+#     on_success: always  # options: [always|never|change] default: always
+#     on_failure: always  # options: [always|never|change] default: always
+#     on_start: never     # options: [always|never|change] default: always
+
+before_install:
+  - sudo apt update -qq
+  - curl -1sLf 'https://dl.cloudsmith.io/public/openmama/openmama/cfg/setup/bash.deb.sh' | sudo bash
+  - sudo apt install -y openmama libgtest-dev
+
+script:
+ - (mkdir gtest_bld && cd gtest_bld && cmake /usr/src/googletest/googletest -DCMAKE_INSTALL_PREFIX=/usr && sudo make install)
+ - cmake -DCMAKE_INSTALL_PREFIX=$(pwd) .
+ - make install
