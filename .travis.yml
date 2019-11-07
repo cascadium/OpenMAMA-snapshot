@@ -12,7 +12,7 @@ dist: bionic
 before_install:
   - sudo apt update -qq
   - curl -1sLf 'https://dl.cloudsmith.io/public/openmama/openmama/cfg/setup/bash.deb.sh' | sudo bash
-  - sudo apt install -y openmama libgtest-dev
+  - sudo apt install -y openmama libgtest-dev libpoco-dev
 
 script:
  - (mkdir gtest_bld && cd gtest_bld && cmake /usr/src/googletest/googletest -DCMAKE_INSTALL_PREFIX=/usr && sudo make install)
