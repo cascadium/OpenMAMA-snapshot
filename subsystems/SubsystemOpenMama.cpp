@@ -328,22 +328,22 @@ void SubsystemOpenMama::defineOptions(Poco::Util::OptionSet &options) {
     payload.required(false).repeatable(true).argument("STR");
     options.addOption(payload);
 
-    Option numQueues(OPTION_NAME_OPENMAMA_QUEUES,
-            "Number of queues to create in OpenMAMA subsystem.");
+    Option numQueues(OPTION_NAME_OPENMAMA_QUEUES, "Q",
+            "Number of queues (processing threads) to create in OpenMAMA subsystem.");
     numQueues.required(false).repeatable(true).argument("NUM");
     options.addOption(numQueues);
 
-    Option dictMiddleware(OPTION_NAME_OPENMAMA_DICT_MIDDLEWARE,
+    Option dictMiddleware(OPTION_NAME_OPENMAMA_DICT_MIDDLEWARE, "dm",
              "OpenMAMA middleware to use for dictionary if different from application's middleware.");
     dictMiddleware.required(false).repeatable(true).argument("STR");
     options.addOption(dictMiddleware);
 
-    Option dictSource(OPTION_NAME_OPENMAMA_DICT_SOURCE,
+    Option dictSource(OPTION_NAME_OPENMAMA_DICT_SOURCE, "ds",
              "OpenMAMA source / prefix to use for dictionary (Default: WOMBAT).");
     dictSource.required(false).repeatable(true).argument("STR");
     options.addOption(dictSource);
 
-    Option dictTransport(OPTION_NAME_OPENMAMA_DICT_TRANSPORT,
+    Option dictTransport(OPTION_NAME_OPENMAMA_DICT_TRANSPORT, "dt",
              "OpenMAMA transport to use for dictionary if different from application's transport.");
     dictTransport.required(false).repeatable(true).argument("STR");
     options.addOption(dictTransport);
